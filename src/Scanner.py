@@ -138,7 +138,7 @@ def blasttarget(dest,sips):
             #sendUDPPacket(sip,dest)
             for sip in sips :
                 if sip != dest :
-                    TEMP_THREAD=Thread(target=sendUDPPacket,args=(sip,dest))
+                    TEMP_THREAD=Thread(target=sendUDPPacket,args=(dest,sip))
                     THREAD_LIST.append(TEMP_THREAD)
             for THREAD in THREAD_LIST:
                 THREAD.start()
